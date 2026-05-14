@@ -1,0 +1,1 @@
+ import { ProductService } from "./product.service"; const service = new ProductService(); export async function listProducts(req,res){ return service.list(); } 

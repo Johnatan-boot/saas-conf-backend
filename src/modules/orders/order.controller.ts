@@ -1,0 +1,1 @@
+ import { OrderService } from "./order.service"; const service = new OrderService(); export async function createOrder(req,res){ return service.create(req.body); } 

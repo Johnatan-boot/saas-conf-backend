@@ -1,0 +1,1 @@
+ export async function createPayment(req,res){ return {message:"payment created"} } 
