@@ -3,10 +3,11 @@
   "version": "2.0.0",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/core/server.ts",
-    "build": "tsc",
+    "build": "tsc && npm run copy-migrations",
+    "copy-migrations": "node -e \"const fs=require('fs'),path=require('path');const src=path.join('src','database','migrations');const dest=path.join('dist','database','migrations');fs.mkdirSync(dest,{recursive:true});fs.readdirSync(src).forEach(f=>fs.copyFileSync(path.join(src,f),path.join(dest,f)));console.log('✅ Migrations copiadas')\"",
     "start": "node dist/core/server.js",
     "migrate": "node -e \"require('./dist/database/migrate').runMigrations().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})\"",
-    "seed": "node -e \"require('./dist/database/seed').runSeed().then(()=>process.exit(0)).catch(e=>{console.error(e);process.exit(1)})\""
+    "seed": "ts-node-dev --transpile-only src/database/seed.ts"
   },
   "dependencies": {
     "@fastify/cors": "^8.5.0",
