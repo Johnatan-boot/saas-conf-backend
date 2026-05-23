@@ -10,7 +10,7 @@ export async function loginController(request: FastifyRequest, reply: FastifyRep
 
 export async function registerController(request: FastifyRequest, reply: FastifyReply) {
   const body = registerSchema.parse(request.body)
-  const result = await registerService(request.tenantId, body)
+  const result = await registerService(request.tenantId, body as any)
   return reply.status(201).send({ success: true, data: result })
 }
 

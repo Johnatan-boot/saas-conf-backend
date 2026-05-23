@@ -19,7 +19,7 @@ export async function paymentRoutes(app: FastifyInstance) {
       notes: z.string().optional(),
     })
     const body = schema.parse(req.body)
-    const id = await registerPayment(req.tenantId, body)
+    const id = await registerPayment(req.tenantId, body as any)
     return rep.status(201).send({ success:true, data: { id } })
   })
 }

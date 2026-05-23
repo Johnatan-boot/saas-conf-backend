@@ -32,7 +32,7 @@ export async function orderRoutes(app: FastifyInstance) {
       notes: z.string().optional(),
     })
     const body = schema.parse(req.body)
-    const order = await createOrderService(req.tenantId, req.userId, body)
+    const order = await createOrderService(req.tenantId, req.userId, body as any)
     return rep.status(201).send({ success:true, data: order })
   })
   app.patch('/:id/status', async (req, rep) => {

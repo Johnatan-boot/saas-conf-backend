@@ -9,12 +9,14 @@ const start = async () => {
   try {
     await testConnection()
     await runMigrations()
+    console.log('✅ Migrations executadas')
 
     await app.listen({ port: env.port, host: '0.0.0.0' })
     console.log(`🚀 Servidor rodando na porta ${env.port}`)
     console.log(`📦 Ambiente: ${env.nodeEnv}`)
+    console.log(`🌐 Frontend permitido: ${env.frontendUrl}`)
   } catch (err) {
-    app.log.error(err)
+    console.error('❌ Erro ao iniciar servidor:', err)
     process.exit(1)
   }
 }

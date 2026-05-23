@@ -14,7 +14,7 @@ export async function tenantRoutes(app: FastifyInstance) {
       adminPassword: z.string().min(6),
     })
     const body = schema.parse(request.body)
-    const result = await onboardTenant(body)
+    const result = await onboardTenant(body as any)
     return reply.status(201).send({ success: true, data: result })
   })
 

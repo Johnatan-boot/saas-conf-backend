@@ -27,7 +27,7 @@ export async function userRoutes(app: FastifyInstance) {
       role: z.enum(['admin','manager','staff']).optional(),
     })
     const body = schema.parse(req.body)
-    const user = await createUserService(req.tenantId, body)
+    const user = await createUserService(req.tenantId, body as any)
     return rep.status(201).send({ success: true, data: user })
   })
 
