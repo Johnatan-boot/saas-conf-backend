@@ -27,23 +27,28 @@ export const buildApp = () => {
     },
   })
 
-  // CORS — aceita o frontend do Render e localhost
+  // CORS — aceita qualquer origem onrender.com + localhost
   app.register(cors, {
     origin: (origin, cb) => {
-      const allowed = [
-        env.frontendUrl,
-        'http://localhost:3000',
-        'http://localhost:5173',
-      ]
-      // Permite requisições sem origin (Postman, curl, etc)
-      if (!origin || allowed.some(o => origin.startsWith(o))) {
+      // Sem origin = Postman, curl, server-to-server
+      if (!origin) return cb(null, true)
+
+      const allowed =
+        origin.includes('onrender.com') ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin === env.frontendUrl
+
+      if (allowed) {
         cb(null, true)
       } else {
-        cb(new Error('CORS bloqueado'), false)
+        console.warn(`[CORS] Bloqueado: ${origin}`)
+        cb(null, false)
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug'],
   })
 
   app.register(jwt, { secret: env.jwtSecret })
@@ -70,7 +75,7 @@ export const buildApp = () => {
   app.register(auditRoutes,     { prefix: '/api/audit' })
   app.register(telegramRoutes,  { prefix: '/api/telegram' })
 
-  // Rota raiz — health check simples
+  // Health check raiz
   app.get('/', async () => ({
     name: 'SaaS Confeitaria API',
     version: '2.0.0',
