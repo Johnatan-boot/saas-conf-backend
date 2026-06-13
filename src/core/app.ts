@@ -24,7 +24,8 @@ import { categoryRoutes }  from '../modules/categories/category.routes'
 
 export const buildApp = () => {
   const app = Fastify({
-    logger: {
+      bodyLimit: 10 * 1024 * 1024, // 10MB — comporta logo em base64
+      logger: {
       level: env.isProd ? 'warn' : 'info',
       transport: env.isProd
         ? undefined

@@ -37,7 +37,12 @@ export function errorHandler(
       (error as any).code === 'FST_JWT_AUTHORIZATION_TOKEN_INVALID') {
     return reply.status(401).send({ success: false, error: 'Token inválido ou expirado' })
   }
-
+if ((error as any).code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+  return reply.status(413).send({
+    success: false,
+    error: 'Arquivo muito grande. Reduza o tamanho da imagem e tente novamente.',
+  })
+}
   return reply.status(500).send({
     success: false,
     error: 'Erro interno do servidor',
