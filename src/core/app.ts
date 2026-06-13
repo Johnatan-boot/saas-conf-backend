@@ -16,6 +16,11 @@ import { dashboardRoutes } from '../modules/dashboard/dashboard.routes'
 import { auditRoutes }     from '../modules/audit/audit.routes'
 import { healthRoutes }    from '../modules/health/health.routes'
 import { telegramRoutes }  from '../modules/telegram/telegram.routes'
+import { themeRoutes }     from '../modules/theme/theme.routes'
+import { catalogRoutes }   from '../modules/catalog/catalog.routes'
+import { checkoutRoutes }  from '../modules/payments/checkout.routes'
+import { ifoodRoutes }     from '../modules/integrations/ifood/ifood.routes'
+import { categoryRoutes }  from '../modules/categories/category.routes'
 
 export const buildApp = () => {
   const app = Fastify({
@@ -27,24 +32,13 @@ export const buildApp = () => {
     },
   })
 
-  // CORS — aceita qualquer origem onrender.com + localhost
   app.register(cors, {
     origin: (origin, cb) => {
-      // Sem origin = Postman, curl, server-to-server
       if (!origin) return cb(null, true)
-
       const allowed =
-        origin.includes('onrender.com') ||
-        origin.includes('localhost') ||
-        origin.includes('127.0.0.1') ||
-        origin === env.frontendUrl
-
-      if (allowed) {
-        cb(null, true)
-      } else {
-        console.warn(`[CORS] Bloqueado: ${origin}`)
-        cb(null, false)
-      }
+        origin.includes('onrender.com') || origin.includes('localhost') ||
+        origin.includes('127.0.0.1') || origin === env.frontendUrl
+      cb(null, !!allowed)
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -52,17 +46,12 @@ export const buildApp = () => {
   })
 
   app.register(jwt, { secret: env.jwtSecret })
-
   app.register(rateLimit, {
-    max: 200,
-    timeWindow: '1 minute',
-    errorResponseBuilder: () => ({
-      success: false,
-      error: 'Muitas requisições. Tente novamente em alguns segundos.',
-    }),
+    max: 200, timeWindow: '1 minute',
+    errorResponseBuilder: () => ({ success: false, error: 'Muitas requisições. Aguarde.' }),
   })
 
-  // Rotas
+  // Rotas existentes
   app.register(healthRoutes,    { prefix: '/health' })
   app.register(authRoutes,      { prefix: '/api/auth' })
   app.register(tenantRoutes,    { prefix: '/api/tenants' })
@@ -75,15 +64,22 @@ export const buildApp = () => {
   app.register(auditRoutes,     { prefix: '/api/audit' })
   app.register(telegramRoutes,  { prefix: '/api/telegram' })
 
-  // Health check raiz
+  // Novos módulos (features anteriores)
+  app.register(themeRoutes,    { prefix: '/api/settings/theme' })
+  app.register(catalogRoutes,  { prefix: '/api/public' })
+  app.register(checkoutRoutes, { prefix: '/api/checkout' })
+
+  // ✅ Integrações: iFood (+ Keeta quando disponível)
+  app.register(ifoodRoutes,    { prefix: '/api/integrations/ifood' })
+
+  // ✅ Categorias de produtos
+  app.register(categoryRoutes, { prefix: '/api/categories' })
+
   app.get('/', async () => ({
-    name: 'SaaS Confeitaria API',
-    version: '2.0.0',
-    status: 'running',
-    timestamp: new Date().toISOString(),
+    name: 'SaaS Confeitaria API', version: '2.0.0', status: 'running',
+    timestamp: new Date().toISOString()
   }))
 
   app.setErrorHandler(errorHandler)
-
   return app
 }

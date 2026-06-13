@@ -13,7 +13,10 @@ const schema = z.object({
   stock: z.number().int().optional(),
   min_stock: z.number().int().optional(),
   category_id: z.number().optional(),
-  image_url: z.string().url().optional(),
+  // ⚠️ Alterado: antes exigia .url(), agora aceita também
+  // imagens em base64 (data:image/...;base64,...) vindas do
+  // upload na página de Produtos. String vazia = remover imagem.
+  image_url: z.string().optional(),
   is_active: z.boolean().optional(),
 })
 
