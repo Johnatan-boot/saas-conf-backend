@@ -8,7 +8,10 @@ export interface ThemeData {
   primaryColor?: string; secondaryColor?: string; backgroundColor?: string
   textColor?: string; cardColor?: string
   logoUrl?: string    // aceita base64 ou URL externa
+  bannerUrl?: string  // banner do hero do catálogo (base64 ou URL)
   storeName?: string; tagline?: string; slug?: string
+  aboutText?: string  // texto da seção "Sobre"
+  address?: string    // endereço exibido em "Contato"
   instagram?: string; facebook?: string; whatsapp?: string; youtube?: string
 }
 
@@ -21,9 +24,12 @@ export async function getTheme(tenantId: number) {
        text_color         AS textColor,
        card_color         AS cardColor,
        logo_url           AS logoUrl,
+       banner_url         AS bannerUrl,
        store_name         AS storeName,
        tagline,
+       about_text         AS aboutText,
        slug,
+       address,
        instagram, facebook, whatsapp, youtube,
        updated_at         AS updatedAt
      FROM store_themes WHERE tenant_id = ?`,
@@ -35,8 +41,9 @@ export async function getTheme(tenantId: number) {
     return {
       primaryColor: '#6F4F37', secondaryColor: '#c4621d',
       backgroundColor: '#fffdf9', textColor: '#261c12',
-      cardColor: '#ffffff', logoUrl: '', storeName: '',
-      tagline: '', slug: '', instagram: '', facebook: '',
+      cardColor: '#ffffff', logoUrl: '', bannerUrl: '', storeName: '',
+      tagline: '', aboutText: '', slug: '', address: '',
+      instagram: '', facebook: '',
       whatsapp: '', youtube: '',
     }
   }
@@ -47,8 +54,9 @@ export async function saveTheme(tenantId: number, data: ThemeData) {
   const {
     primaryColor = '#6F4F37', secondaryColor = '#c4621d',
     backgroundColor = '#fffdf9', textColor = '#261c12',
-    cardColor = '#ffffff', logoUrl = '', storeName = '',
-    tagline = '', slug = '', instagram = '', facebook = '',
+    cardColor = '#ffffff', logoUrl = '', bannerUrl = '', storeName = '',
+    tagline = '', aboutText = '', slug = '', address = '',
+    instagram = '', facebook = '',
     whatsapp = '', youtube = '',
   } = data
 
@@ -66,9 +74,9 @@ export async function saveTheme(tenantId: number, data: ThemeData) {
   await db.execute(
     `INSERT INTO store_themes
        (tenant_id, primary_color, secondary_color, background_color, text_color,
-        card_color, logo_url, store_name, tagline, slug,
+        card_color, logo_url, banner_url, store_name, tagline, about_text, slug, address,
         instagram, facebook, whatsapp, youtube)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON DUPLICATE KEY UPDATE
        primary_color     = VALUES(primary_color),
        secondary_color   = VALUES(secondary_color),
@@ -76,17 +84,20 @@ export async function saveTheme(tenantId: number, data: ThemeData) {
        text_color        = VALUES(text_color),
        card_color        = VALUES(card_color),
        logo_url          = VALUES(logo_url),
+       banner_url        = VALUES(banner_url),
        store_name        = VALUES(store_name),
        tagline           = VALUES(tagline),
+       about_text        = VALUES(about_text),
        slug              = VALUES(slug),
+       address           = VALUES(address),
        instagram         = VALUES(instagram),
        facebook          = VALUES(facebook),
        whatsapp          = VALUES(whatsapp),
        youtube           = VALUES(youtube),
        updated_at        = NOW()`,
     [tenantId, primaryColor, secondaryColor, backgroundColor, textColor,
-     cardColor, logoUrl || null, storeName || null, tagline || null,
-     slug || null, instagram || null, facebook || null,
+     cardColor, logoUrl || null, bannerUrl || null, storeName || null, tagline || null,
+     aboutText || null, slug || null, address || null, instagram || null, facebook || null,
      whatsapp || null, youtube || null]
   )
 

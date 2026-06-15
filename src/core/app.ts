@@ -21,11 +21,17 @@ import { catalogRoutes }   from '../modules/catalog/catalog.routes'
 import { checkoutRoutes }  from '../modules/payments/checkout.routes'
 import { ifoodRoutes }     from '../modules/integrations/ifood/ifood.routes'
 import { categoryRoutes }  from '../modules/categories/category.routes'
+import { customerAuthRoutes } from '../modules/customer-auth/customer-auth.routes'
 
 export const buildApp = () => {
   const app = Fastify({
-      bodyLimit: 10 * 1024 * 1024, // 10MB — comporta logo em base64
-      logger: {
+    // Logo da loja vai em base64 no corpo do PUT /api/settings/theme.
+    // O padrão do Fastify (1 MiB) é insuficiente para fotos de celular
+    // convertidas em base64 (~1.33x o tamanho do arquivo original).
+    // 10 MiB cobre confortavelmente o limite de 2MB de arquivo definido
+    // no frontend (DesignSettings.tsx).
+    bodyLimit: 10 * 1024 * 1024,
+    logger: {
       level: env.isProd ? 'warn' : 'info',
       transport: env.isProd
         ? undefined
@@ -68,6 +74,7 @@ export const buildApp = () => {
   // Novos módulos (features anteriores)
   app.register(themeRoutes,    { prefix: '/api/settings/theme' })
   app.register(catalogRoutes,  { prefix: '/api/public' })
+  app.register(customerAuthRoutes, { prefix: '/api/public' })
   app.register(checkoutRoutes, { prefix: '/api/checkout' })
 
   // ✅ Integrações: iFood (+ Keeta quando disponível)

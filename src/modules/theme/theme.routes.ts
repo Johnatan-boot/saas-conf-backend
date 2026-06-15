@@ -27,7 +27,7 @@ export async function themeRoutes(app: FastifyInstance) {
     try {
       const {
         primaryColor, secondaryColor, backgroundColor, textColor, cardColor,
-        logoUrl, storeName, tagline, slug,
+        logoUrl, bannerUrl, storeName, tagline, aboutText, slug, address,
         instagram, facebook, whatsapp, youtube,
       } = req.body as any
 
@@ -41,7 +41,7 @@ export async function themeRoutes(app: FastifyInstance) {
 
       const data = await saveTheme(req.tenantId, {
         primaryColor, secondaryColor, backgroundColor, textColor, cardColor,
-        logoUrl, storeName, tagline, slug,
+        logoUrl, bannerUrl, storeName, tagline, aboutText, slug, address,
         instagram, facebook, whatsapp, youtube,
       })
       return rep.send({ success: true, data })

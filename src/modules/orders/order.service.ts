@@ -53,6 +53,16 @@ export async function createOrderService(tenantId: number, userId: number, data:
 
   for (const item of resolvedItems) {
     await addOrderItem(orderId, item)
+    // Mantém o estoque sincronizado em tempo real com TODOS os canais
+    // de venda (admin e catálogo). Permite ir negativo de propósito:
+    // numa confeitaria, estoque negativo = "precisa produzir para
+    // atender encomenda", não bloqueia o pedido.
+    if (item.product_id) {
+      await db.execute(
+        'UPDATE products SET stock = stock - ? WHERE id = ? AND tenant_id = ?',
+        [item.quantity, item.product_id, tenantId]
+      )
+    }
   }
 
   if (data.client_id) await updateClientStats(data.client_id)
@@ -84,7 +94,27 @@ export async function updateOrderStatusService(id: number, tenantId: number, sta
   const validStatus = ['pending','confirmed','in_production','ready','delivered','cancelled']
   if (!validStatus.includes(status)) throw new AppError('Status inválido')
   await updateOrderStatus(id, tenantId, status)
-  if (status === 'delivered' && order.client_id) await updateClientStats(order.client_id)
+  // total_orders/total_spent são recalculados do zero a cada chamada
+  // (COUNT/SUM direto em orders) — então é seguro/idempotente chamar
+  // em QUALQUER mudança de status. Antes só rodava em 'delivered':
+  // cancelar um pedido deixava total_spent "preso" contando um pedido
+  // já cancelado (Dashboard "Melhores Clientes" e Perfil do cliente
+  // ficavam com valor desatualizado até outro pedido virar 'delivered').
+  if (order.client_id) await updateClientStats(order.client_id)
+
+  // Cancelamento devolve o estoque que foi deduzido na criação —
+  // vale tanto para pedidos do admin quanto do catálogo, já que
+  // ambos usam a mesma tabela orders/order_items.
+  if (status === 'cancelled' && order.status !== 'cancelled') {
+    for (const item of order.items || []) {
+      if (item.product_id) {
+        await db.execute(
+          'UPDATE products SET stock = stock + ? WHERE id = ? AND tenant_id = ?',
+          [item.quantity, item.product_id, tenantId]
+        )
+      }
+    }
+  }
 
   const updated = await findOrderById(id, tenantId)
 

@@ -1,11 +1,15 @@
 import { db } from '../../database/connection'
+import { updateClientStats } from '../clients/client.repository'
+import { triggerZapier, ZapierEvents } from '../../shared/webhooks/zapier'
+import { notifyAllSessions } from '../telegram/telegram.bot'
+import { integrationEnv } from '../../config/env'
 
 export async function getPublicStore(slug: string) {
   const [rows]: any = await db.execute(
     `SELECT primary_color AS primaryColor, secondary_color AS secondaryColor,
             background_color AS backgroundColor, text_color AS textColor,
-            card_color AS cardColor, logo_url AS logoUrl,
-            store_name AS storeName, tagline, slug,
+            card_color AS cardColor, logo_url AS logoUrl, banner_url AS bannerUrl,
+            store_name AS storeName, tagline, about_text AS aboutText, slug, address,
             instagram, facebook, whatsapp, youtube
      FROM store_themes WHERE slug = ?`, [slug]
   )
@@ -40,7 +44,7 @@ export async function getPublicProducts(slug: string) {
   return rows
 }
 
-export async function createPublicOrder(slug: string, payload: any) {
+export async function createPublicOrder(slug: string, payload: any, clientId: number | null = null) {
   const [tenantRow]: any = await db.execute(
     'SELECT tenant_id FROM store_themes WHERE slug = ?', [slug]
   )
@@ -64,23 +68,28 @@ export async function createPublicOrder(slug: string, payload: any) {
     // Gera código do pedido
     const code = `CAT-${Date.now()}`
 
-    // Cria o pedido
+    // Cria o pedido — client_id vincula ao cliente logado (se houver),
+    // permitindo que apareça em "Meus Pedidos" e nas estatísticas
+    // do cliente (/clientes no admin). Pedido como convidado = NULL.
     const [orderRes]: any = await conn.execute(
-      `INSERT INTO orders (tenant_id, code, status, delivery_type, subtotal, discount, total, notes, created_at)
-       VALUES (?, ?, 'pending', 'pickup', ?, 0, ?, ?, NOW())`,
-      [tenantId, code, payload.total, payload.total, payload.customer.notes || null]
+      `INSERT INTO orders (tenant_id, client_id, code, status, delivery_type, subtotal, discount, total, notes, payment_method, created_at)
+       VALUES (?, ?, ?, 'pending', 'pickup', ?, 0, ?, ?, ?, NOW())`,
+      [tenantId, clientId, code, payload.total, payload.total, payload.customer.notes || null, payload.paymentMethod || null]
     )
     const orderId = orderRes.insertId
 
     // Insere itens e desconta estoque
+    const itemDescs: string[] = []
     for (const item of payload.items) {
       const [prodInfo]: any = await conn.execute(
         'SELECT name FROM products WHERE id = ?', [item.productId]
       )
+      const productName = prodInfo[0]?.name || ''
+      itemDescs.push(`${item.quantity}x ${productName}`)
       await conn.execute(
         `INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, total_price)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.productId, prodInfo[0]?.name || '', item.quantity, item.price, item.price * item.quantity]
+        [orderId, item.productId, productName, item.quantity, item.price, item.price * item.quantity]
       )
       // Desconta estoque em tempo real
       await conn.execute(
@@ -90,6 +99,26 @@ export async function createPublicOrder(slug: string, payload: any) {
     }
 
     await conn.commit()
+
+    // Atualiza total_orders/total_spent do cliente (mesma lógica
+    // usada quando o admin cria/atualiza um pedido manualmente)
+    if (clientId) await updateClientStats(clientId)
+
+    // Notifica igual a um pedido criado pelo admin — sem isso,
+    // vendas do catálogo passavam batido pro lojista.
+    triggerZapier(ZapierEvents.NEW_ORDER, {
+      order_code: code,
+      client_name: payload.customer?.name || 'Cliente do catálogo',
+      total: payload.total,
+      tenant_id: tenantId,
+      items: itemDescs.join(', '),
+    }).catch(() => {})
+
+    if (integrationEnv.telegramToken) {
+      const msg = `🛒 <b>Novo Pedido (Catálogo)!</b>\n📋 ${code}\n👤 ${payload.customer?.name || 'Cliente'}\n💳 ${payload.paymentMethod || '-'}\n💰 R$ ${Number(payload.total).toFixed(2).replace('.', ',')}`
+      notifyAllSessions(integrationEnv.telegramToken, tenantId, msg).catch(() => {})
+    }
+
     return { orderId: `#${orderId}`, code }
   } catch (err) {
     await conn.rollback()
