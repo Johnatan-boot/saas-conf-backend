@@ -8,12 +8,13 @@ export async function tenantRoutes(app: FastifyInstance) {
   // Rota pública — cadastro de nova confeitaria
   app.post('/onboard', async (request, reply) => {
     const schema = z.object({
-      tenantName: z.string().min(2),
-      adminName: z.string().min(2),
-      adminEmail: z.string().email(),
+      tenantName:    z.string().min(2),
+      adminName:     z.string().min(2),
+      adminEmail:    z.string().email(),
       adminPassword: z.string().min(6),
+      plan: z.enum(['economico', 'standard', 'premium']).default('economico'),
     })
-    const body = schema.parse(request.body)
+    const body = schema.parse(request.body) as any
     const result = await onboardTenant(body as any)
     return reply.status(201).send({ success: true, data: result })
   })

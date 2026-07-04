@@ -241,7 +241,7 @@ async function runQuery(sqlRaw: string, params: any[] = []) {
       throw new Error('Query não mockada: ' + sqlRaw)
 }
 
-process.env.JWT_SECRET = 'dev_secret_change_in_production_32chars'
+process.env.JWT_SECRET = 'gere_uma_chave_segura_de_32_caracteres_aqui'
 
 import { catalogRoutes } from '../src/modules/catalog/catalog.routes'
 import { customerAuthRoutes } from '../src/modules/customer-auth/customer-auth.routes'

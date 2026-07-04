@@ -14,10 +14,13 @@ export async function logAction(data: {
 }
 
 export async function getAuditLogs(tenantId: number, limit = 50) {
+  // ⚠️ LIMIT não pode ser bound param com mysql2 .execute()
+  const safeLimit = Math.min(Math.max(1, Math.floor(Number(limit) || 50)), 500)
   const [rows]: any = await db.execute(
-    `SELECT al.*, u.name as user_name FROM audit_logs al LEFT JOIN users u ON u.id=al.user_id
-     WHERE al.tenant_id=? ORDER BY al.created_at DESC LIMIT ?`,
-    [tenantId, limit]
+    `SELECT al.*, u.name as user_name
+     FROM audit_logs al LEFT JOIN users u ON u.id=al.user_id
+     WHERE al.tenant_id=? ORDER BY al.created_at DESC LIMIT ${safeLimit}`,
+    [tenantId]
   )
   return rows
 }

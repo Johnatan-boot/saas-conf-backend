@@ -16,12 +16,18 @@ export async function onboardTenant(data: {
   adminName: string
   adminEmail: string
   adminPassword: string
+  plan?: string
 }) {
   let slug = slugify(data.tenantName)
   const existing = await findTenantBySlug(slug)
   if (existing) slug = `${slug}-${Date.now()}`
 
-  const tenantId = await createTenant({ name: data.tenantName, slug, email: data.adminEmail })
+  const tenantId = await createTenant({
+    name:  data.tenantName,
+    slug,
+    email: data.adminEmail,
+    plan:  data.plan || 'economico',
+  })
   const hashedPwd = await hashPassword(data.adminPassword)
   const userId = await createUser({
     tenant_id: tenantId, name: data.adminName,
