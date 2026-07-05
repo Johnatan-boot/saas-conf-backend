@@ -22,6 +22,7 @@ import { checkoutRoutes }  from '../modules/payments/checkout.routes'
 import { ifoodRoutes }     from '../modules/integrations/ifood/ifood.routes'
 import { categoryRoutes }  from '../modules/categories/category.routes'
 import { customerAuthRoutes } from '../modules/customer-auth/customer-auth.routes'
+import { superAdminRoutes }   from '../modules/superadmin/superadmin.routes'
 
 export const buildApp = () => {
   const app = Fastify({
@@ -82,6 +83,9 @@ export const buildApp = () => {
 
   // ✅ Categorias de produtos
   app.register(categoryRoutes, { prefix: '/api/categories' })
+
+  // ✅ Super Admin — gestão cross-tenant (role='super_admin' obrigatório)
+  app.register(superAdminRoutes, { prefix: '/api/superadmin' })
 
   app.get('/', async () => ({
     name: 'SaaS Confeitaria API', version: '2.0.0', status: 'running',
