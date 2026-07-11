@@ -11,7 +11,11 @@ import { authMiddleware } from '../../middlewares/auth.middleware'
 import { tenantMiddleware } from '../../middlewares/tenant.middleware'
 import { gatewayStatus, createStripeSession, createMercadoPagoPreference, createPagarmeCheckout } from './gateway.service'
 
-const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173'
+const frontendUrl = (req?: any) => {
+  const origin = req?.headers?.origin
+  if (origin && !origin.includes('localhost')) return origin
+  return process.env.FRONTEND_URL || 'https://saas-conf-frontends.onrender.com'
+}
 
 export async function checkoutRoutes(app: FastifyInstance) {
   app.addHook('preHandler', tenantMiddleware)
@@ -25,8 +29,8 @@ export async function checkoutRoutes(app: FastifyInstance) {
     const { name, amount, quantity } = req.body as any
     const result = await createStripeSession({
       name, amount, quantity,
-      successUrl: `${frontendUrl()}/payments?success=true`,
-      cancelUrl: `${frontendUrl()}/payments?cancel=true`,
+      successUrl: `${frontendUrl(req)}/payments?success=true`,
+      cancelUrl: `${frontendUrl(req)}/payments?cancel=true`,
     })
     if ('error' in result) return rep.status(result.status || 400).send({ error: result.error })
     return rep.send({ url: result.url })
@@ -37,8 +41,8 @@ export async function checkoutRoutes(app: FastifyInstance) {
     const { name, amount, quantity, customerName, customerEmail, customerDocument } = req.body as any
     const result = await createMercadoPagoPreference({
       name, amount, quantity, customerName, customerEmail, customerDocument,
-      successUrl: `${frontendUrl()}/payments?success=true`,
-      cancelUrl: `${frontendUrl()}/payments?cancel=true`,
+      successUrl: `${frontendUrl(req)}/payments?success=true`,
+      cancelUrl: `${frontendUrl(req)}/payments?cancel=true`,
     })
     if ('error' in result) return rep.status(result.status || 400).send({ error: result.error, details: (result as any).details })
     return rep.send({ url: result.url })
@@ -49,8 +53,8 @@ export async function checkoutRoutes(app: FastifyInstance) {
     const { name, amount, quantity, customerName, customerEmail, customerDocument, customerPhone } = req.body as any
     const result = await createPagarmeCheckout({
       name, amount, quantity, customerName, customerEmail, customerDocument, customerPhone,
-      successUrl: `${frontendUrl()}/payments?success=true`,
-      cancelUrl: `${frontendUrl()}/payments?cancel=true`,
+      successUrl: `${frontendUrl(req)}/payments?success=true`,
+      cancelUrl: `${frontendUrl(req)}/payments?cancel=true`,
     })
     if ('error' in result) return rep.status(result.status || 400).send({ error: result.error, details: (result as any).details })
     return rep.send({ url: result.url })

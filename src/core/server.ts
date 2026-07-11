@@ -67,6 +67,8 @@ const start = async () => {
     await testConnection()
     await runMigrations()
     await runSeedIfEmpty()  // ← roda só se banco estiver vazio
+    await ensureSuperAdmin()   // ← cria super admin se não existir
+    await resetJonyAdminPassword() // ← reseta senha do admin da Jony (uma vez)
 
     await app.listen({ port: env.port, host: '0.0.0.0' })
     console.log(`🚀 Servidor rodando na porta ${env.port}`)
@@ -75,6 +77,64 @@ const start = async () => {
   } catch (err) {
     console.error('❌ Erro ao iniciar servidor:', err)
     process.exit(1)
+  }
+}
+
+// ── Garante que o super admin existe (idempotente) ────────────────────────
+async function ensureSuperAdmin() {
+  try {
+    const email = 'johnatan.quenes@gmail.com'
+    const [existing]: any = await db.execute(
+      "SELECT id FROM users WHERE email=? AND role='super_admin' LIMIT 1", [email]
+    )
+    if (existing.length > 0) {
+      console.log('✅ Super Admin já existe:', email)
+      return
+    }
+    // Pega o primeiro tenant como âncora (ou cria com tenant_id=1)
+    const [tenants]: any = await db.execute('SELECT id FROM tenants ORDER BY id ASC LIMIT 1')
+    const tenantId = tenants[0]?.id || 1
+    const pwd = await hashPassword('Jony967745@$$')
+    await db.execute(
+      "INSERT INTO users (tenant_id, name, email, password, role, is_active) VALUES (?,?,?,?,?,1)",
+      [tenantId, 'Diego Super Admin', email, pwd, 'super_admin']
+    )
+    console.log('✅ Super Admin criado:', email)
+  } catch (err) {
+    console.error('⚠️ Erro ao criar super admin (não crítico):', err)
+  }
+}
+
+// ── Reset de senha da Confeitaria do Jony (one-shot com flag) ─────────────
+async function resetJonyAdminPassword() {
+  try {
+    // Usa access_logs como flag — só reseta se não tiver registro
+    const [flag]: any = await db.execute(
+      "SELECT id FROM access_logs WHERE action='password_reset' AND details='jony_seed_v1' LIMIT 1"
+    )
+    if (flag.length > 0) return // já foi feito
+
+    const [jonyTenant]: any = await db.execute(
+      "SELECT id FROM tenants WHERE slug='confeitaria-do-jony' LIMIT 1"
+    )
+    if (!jonyTenant.length) return
+
+    const tenantId = jonyTenant[0].id
+    const pwd = await hashPassword('Jony9677@$$')
+    const [updated]: any = await db.execute(
+      "UPDATE users SET password=? WHERE tenant_id=? AND role IN ('admin','manager')",
+      [pwd, tenantId]
+    )
+
+    if ((updated as any).affectedRows > 0) {
+      // Registra flag para não repetir
+      await db.execute(
+        "INSERT INTO access_logs (action, details) VALUES ('password_reset','jony_seed_v1')"
+      )
+      console.log('✅ Senha do admin da Confeitaria do Jony resetada para: Jony9677@$$')
+    }
+  } catch (err) {
+    console.error('⚠️ Erro ao resetar senha da Jony (não crítico):', err)
   }
 }
 

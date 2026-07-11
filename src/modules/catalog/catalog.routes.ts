@@ -4,7 +4,14 @@ import { verifyCustomerToken } from '../customer-auth/customer-auth.service'
 import { createStripeSession, createMercadoPagoPreference, createPagarmeCheckout } from '../payments/gateway.service'
 import { z } from 'zod'
 
-const frontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173'
+const frontendUrl = (req?: any) => {
+  // Usa a origin da requisição se disponível (robusto em qualquer ambiente)
+  // Fallback: FRONTEND_URL do .env, depois URL de produção conhecida
+  const origin = req?.headers?.origin
+  if (origin && !origin.includes('localhost')) return origin
+  return process.env.FRONTEND_URL
+    || 'https://saas-conf-frontends.onrender.com'
+}
 
 // Token do cliente logado é opcional — convidado segue sem client_id.
 function getOptionalClientId(req: FastifyRequest, slug: string): number | null {
@@ -107,8 +114,8 @@ export async function catalogRoutes(app: FastifyInstance) {
       customerEmail:    body.customer.email     || undefined,
       customerDocument: body.customer.document  || undefined,
       customerPhone:    body.customer.phone      || undefined,
-      successUrl: `${frontendUrl()}/catalogo/${slug}?payment=success&order=${order.code}`,
-      cancelUrl:  `${frontendUrl()}/catalogo/${slug}?payment=cancel&order=${order.code}`,
+      successUrl: `${frontendUrl(req)}/catalogo/${slug}?payment=success&order=${order.code}`,
+      cancelUrl:  `${frontendUrl(req)}/catalogo/${slug}?payment=cancel&order=${order.code}`,
     }
 
     // PASSO 2: sessão de pagamento

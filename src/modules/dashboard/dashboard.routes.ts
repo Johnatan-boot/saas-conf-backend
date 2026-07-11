@@ -26,4 +26,26 @@ export async function dashboardRoutes(app: FastifyInstance) {
   app.get('/top-clients', async (req, rep) => {
     return rep.send({ success:true, data: await getTopClients(req.tenantId) })
   })
+
+  // ── Analíticas avançadas ──────────────────────────────────────────────
+  app.get('/profit', async (req, rep) => {
+    const days = Number((req.query as any).days) || 30
+    const { getProfitData } = await import('./dashboard.repository')
+    return rep.send({ success: true, data: await getProfitData(req.tenantId, days) })
+  })
+
+  app.get('/smart-menu', async (req, rep) => {
+    const { getSmartMenuData } = await import('./dashboard.repository')
+    return rep.send({ success: true, data: await getSmartMenuData(req.tenantId) })
+  })
+
+  app.get('/recurrence', async (req, rep) => {
+    const { getRecurrenceData } = await import('./dashboard.repository')
+    return rep.send({ success: true, data: await getRecurrenceData(req.tenantId) })
+  })
+
+  app.get('/waste', async (req, rep) => {
+    const { getWasteData } = await import('./dashboard.repository')
+    return rep.send({ success: true, data: await getWasteData(req.tenantId) })
+  })
 }

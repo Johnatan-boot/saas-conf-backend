@@ -105,7 +105,44 @@ export async function superAdminRoutes(app: FastifyInstance) {
     return rep.send({ success: true })
   })
 
-  // ── Criar super_admin via API (setup inicial) ─────────────────────────
+  // ── Reset senha de qualquer usuário admin do tenant ──────────────────
+  app.put('/tenants/:id/reset-password', async (req, rep) => {
+    const { id } = req.params as any
+    const { newPassword } = req.body as any
+    if (!newPassword || newPassword.length < 6) {
+      return rep.status(400).send({ success: false, error: 'Senha mínima: 6 caracteres' })
+    }
+    const hash = await hashPassword(newPassword)
+    const [res]: any = await db.execute(
+      "UPDATE users SET password=? WHERE tenant_id=? AND role IN ('admin','manager')",
+      [hash, id]
+    )
+    if ((res as any).affectedRows === 0) {
+      return rep.status(404).send({ success: false, error: 'Nenhum usuário admin encontrado neste tenant' })
+    }
+    // Registra no log de acesso
+    await db.execute(
+      "INSERT INTO access_logs (tenant_id, action, details) VALUES (?, 'password_reset', ?)",
+      [id, `Reset pelo super admin ${req.userId}`]
+    )
+    return rep.send({ success: true, message: `Senha resetada para ${(res as any).affectedRows} usuário(s)` })
+  })
+
+  // ── Access Logs ───────────────────────────────────────────────────────
+  app.get('/access-logs', async (req, rep) => {
+    const limit = Math.min(Number((req.query as any).limit) || 100, 500)
+    const tenantId = (req.query as any).tenant_id
+    let sql = `SELECT al.*, t.name as tenant_name, u.name as user_name
+               FROM access_logs al
+               LEFT JOIN tenants t ON t.id = al.tenant_id
+               LEFT JOIN users u ON u.id = al.user_id
+               WHERE 1=1`
+    const params: any[] = []
+    if (tenantId) { sql += ' AND al.tenant_id = ?'; params.push(tenantId) }
+    sql += ` ORDER BY al.created_at DESC LIMIT ${limit}`
+    const [rows]: any = await db.execute(sql, params)
+    return rep.send({ success: true, data: rows })
+  })
   app.post('/setup', async (req, rep) => {
     const setupKey = req.headers['x-setup-key']
     if (setupKey !== process.env.SUPERADMIN_SETUP_KEY) {
@@ -120,11 +157,11 @@ export async function superAdminRoutes(app: FastifyInstance) {
     const hash = await hashPassword(password)
     const [existing]: any = await db.execute('SELECT id FROM users WHERE email=?', [email])
     if (existing.length > 0) {
-      await db.execute('UPDATE users SET password_hash=?, role=?, name=? WHERE email=?', [hash, 'super_admin', name, email])
+      await db.execute('UPDATE users SET password=?, role=?, name=? WHERE email=?', [hash, 'super_admin', name, email])
       return rep.send({ success: true, message: 'Super admin atualizado' })
     }
     await db.execute(
-      'INSERT INTO users (tenant_id, name, email, password_hash, role) VALUES (1,?,?,?,?)',
+      'INSERT INTO users (tenant_id, name, email, password, role) VALUES (1,?,?,?,?)',
       [name, email, hash, 'super_admin']
     )
     return rep.status(201).send({ success: true, message: 'Super admin criado' })
