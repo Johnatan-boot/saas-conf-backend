@@ -13,9 +13,16 @@ export async function tenantRoutes(app: FastifyInstance) {
       adminEmail:    z.string().email(),
       adminPassword: z.string().min(6),
       plan: z.enum(['economico', 'standard', 'premium']).default('economico'),
+      contractAccepted: z.literal(true, {
+        errorMap: () => ({ message: 'É necessário aceitar o contrato para continuar' }),
+      }),
     })
     const body = schema.parse(request.body) as any
-    const result = await onboardTenant(body as any)
+    const result = await onboardTenant({
+      ...body,
+      ipAddress: request.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || request.ip,
+      userAgent: request.headers['user-agent'],
+    })
     return reply.status(201).send({ success: true, data: result })
   })
 

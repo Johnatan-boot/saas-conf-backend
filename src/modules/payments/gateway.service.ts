@@ -25,10 +25,15 @@ export interface GatewayCheckoutInput {
   customerPhone?: string
   successUrl: string
   cancelUrl: string
+  // Referência externa usada para conciliar o pagamento no webhook
+  // (ex: assinatura SaaS de um tenant). Opcional — não usado pelo
+  // checkout de pedidos do catálogo.
+  externalReference?: string
+  metadata?: Record<string, string>
 }
 
 export type GatewayResult =
-  | { url: string }
+  | { url: string; externalId?: string }
   | { error: string; status?: number; details?: any }
 
 export function gatewayStatus() {
@@ -50,8 +55,10 @@ export async function createStripeSession(input: GatewayCheckoutInput): Promise<
     mode: 'payment',
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
+    client_reference_id: input.externalReference,
+    metadata: input.metadata,
   })
-  return { url: session.url as string }
+  return { url: session.url as string, externalId: session.id }
 }
 
 // --- MERCADO PAGO ---
@@ -70,9 +77,11 @@ export async function createMercadoPagoPreference(input: GatewayCheckoutInput): 
       payer: payerBody,
       back_urls: { success: input.successUrl, failure: input.cancelUrl, pending: input.successUrl },
       auto_return: 'approved',
+      external_reference: input.externalReference,
+      metadata: input.metadata,
     },
   })
-  return { url: result.init_point as string }
+  return { url: result.init_point as string, externalId: result.id }
 }
 
 // --- PAGAR.ME ---
@@ -93,7 +102,8 @@ export async function createPagarmeCheckout(input: GatewayCheckoutInput): Promis
     method: 'POST',
     headers: { 'Authorization': 'Basic ' + Buffer.from(secretKey + ':').toString('base64'), 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      code: `or_${Date.now()}`,
+      code: input.externalReference || `or_${Date.now()}`,
+      metadata: input.metadata,
       items: [{ amount: Math.round(input.amount * 100), description: input.name, quantity: input.quantity || 1, code: 'prd_1' }],
       customer: { name: input.customerName || 'Cliente', email: input.customerEmail || 'cliente@conf.com', type: docType, document: cleanDoc || '00000000000', phones: { mobile_phone: { country_code: '55', area_code: areaCode, number: phoneNumber } } },
       payments: [{
@@ -114,5 +124,5 @@ export async function createPagarmeCheckout(input: GatewayCheckoutInput): Promis
   }
   const checkoutUrl = data?.checkouts?.[0]?.payment_url
   if (!checkoutUrl) return { error: 'URL de checkout não retornada pelo Pagar.me', status: 500 }
-  return { url: checkoutUrl }
+  return { url: checkoutUrl, externalId: data?.id }
 }

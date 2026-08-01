@@ -23,6 +23,7 @@ import { ifoodRoutes }     from '../modules/integrations/ifood/ifood.routes'
 import { categoryRoutes }  from '../modules/categories/category.routes'
 import { customerAuthRoutes } from '../modules/customer-auth/customer-auth.routes'
 import { superAdminRoutes }   from '../modules/superadmin/superadmin.routes'
+import { subscriptionRoutes } from '../modules/subscriptions/subscription.routes'
 
 export const buildApp = () => {
   const app = Fastify({
@@ -59,6 +60,20 @@ export const buildApp = () => {
     errorResponseBuilder: () => ({ success: false, error: 'Muitas requisições. Aguarde.' }),
   })
 
+  // Guarda o corpo bruto da requisição (Buffer) em request.rawBody.
+  // Necessário para validar a assinatura do webhook do Stripe
+  // (stripe.webhooks.constructEvent exige o payload exatamente como
+  // veio na rede, sem passar pelo JSON.parse/stringify).
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+    ;(req as any).rawBody = body
+    if (!body || body.length === 0) return done(null, {})
+    try {
+      done(null, JSON.parse(body.toString('utf8')))
+    } catch (err) {
+      done(err as Error, undefined)
+    }
+  })
+
   // Rotas existentes
   app.register(healthRoutes,    { prefix: '/health' })
   app.register(authRoutes,      { prefix: '/api/auth' })
@@ -86,6 +101,9 @@ export const buildApp = () => {
 
   // ✅ Super Admin — gestão cross-tenant (role='super_admin' obrigatório)
   app.register(superAdminRoutes, { prefix: '/api/superadmin' })
+
+  // ✅ Assinaturas do SaaS — checkout do próprio tenant + webhooks dos gateways
+  app.register(subscriptionRoutes, { prefix: '/api/subscriptions' })
 
   app.get('/', async () => ({
     name: 'SaaS Confeitaria API', version: '2.0.0', status: 'running',

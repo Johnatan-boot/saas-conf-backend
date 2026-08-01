@@ -39,6 +39,21 @@ export async function updateTenantPlan(id: number, plan: string, stripeCustomerI
   )
 }
 
+export async function recordContractAcceptance(data: {
+  tenantId: number; plan: string; contractVersion: string
+  ipAddress?: string; userAgent?: string
+}) {
+  await db.execute(
+    `INSERT INTO contract_acceptances (tenant_id, plan, contract_version, ip_address, user_agent)
+     VALUES (?, ?, ?, ?, ?)`,
+    [data.tenantId, data.plan, data.contractVersion, data.ipAddress || null, data.userAgent || null]
+  )
+  await db.execute(
+    'UPDATE tenants SET contract_accepted_at = NOW(), contract_version = ? WHERE id = ?',
+    [data.contractVersion, data.tenantId]
+  )
+}
+
 export async function listAllTenants() {
   const [rows]: any = await db.execute(
     'SELECT id, name, slug, email, plan, plan_status, created_at FROM tenants WHERE deleted_at IS NULL ORDER BY created_at DESC'
