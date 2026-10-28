@@ -18,7 +18,7 @@ import { authMiddleware, requireRole } from '../../middlewares/auth.middleware'
 import { env } from '../../config/env'
 import { findTenantById } from '../tenants/tenant.repository'
 import {
-  createStripeSession, createMercadoPagoPreference, createPagarmeCheckout,
+  createStripeSession, createMercadoPagoPreference, createMercadoPagoPix, createPagarmeCheckout,
 } from '../payments/gateway.service'
 import {
   PLAN_PRICES, CYCLE_MONTHS, CYCLE_DISCOUNT,
@@ -30,6 +30,18 @@ const frontendUrl = (req?: any) => {
   const origin = req?.headers?.origin
   if (origin && !origin.includes('localhost')) return origin
   return process.env.FRONTEND_URL || 'https://saas-conf-frontends.onrender.com'
+}
+
+// URL pública do backend para o Mercado Pago avisar o pagamento (webhook).
+// Em localhost não existe URL pública: retorna undefined e a confirmação é feita
+// pela consulta ativa (GET /mercadopago/payment/:id) que o frontend faz sozinho.
+const publicApiUrl = (req: any): string | undefined => {
+  const fromEnv = (process.env.PUBLIC_API_URL || process.env.BACKEND_URL || '').trim().replace(/\/+$/, '')
+  if (fromEnv) return fromEnv
+  const host = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '')
+  if (!host || /localhost|127\.0\.0\.1|\[::1\]/.test(host)) return undefined
+  const proto = String(req?.headers?.['x-forwarded-proto'] || 'https').split(',')[0]
+  return `${proto}://${host}`
 }
 
 export async function subscriptionRoutes(app: FastifyInstance) {
@@ -46,6 +58,8 @@ export async function subscriptionRoutes(app: FastifyInstance) {
         customerEmail: z.string().email().optional(),
         customerDocument: z.string().optional(),
         customerPhone: z.string().optional(),
+        // Mercado Pago: 'pix' (QR Code transparente) ou 'card' (Checkout Pro só cartão)
+        paymentMethod: z.enum(['pix', 'card']).optional(),
       })
       const body = schema.parse(req.body)
 
@@ -73,6 +87,25 @@ export async function subscriptionRoutes(app: FastifyInstance) {
         successUrl, cancelUrl,
         externalReference,
         metadata: { tenantId: String(tenant.id), plan, billingCycle: body.billingCycle },
+        paymentMethod: body.paymentMethod,
+        // Plano mensal é à vista; ciclos longos permitem parcelar em até 12x.
+        maxInstallments: body.billingCycle === 'mensal' ? 1 : 12,
+        notificationUrl: publicApiUrl(req)
+          ? `${publicApiUrl(req)}/api/subscriptions/webhook/mercadopago`
+          : undefined,
+      }
+
+      // Mercado Pago + PIX transparente: devolve o QR Code para o próprio sistema exibir.
+      if (body.gateway === 'mercadopago' && body.paymentMethod === 'pix') {
+        const pixResult = await createMercadoPagoPix(commonInput)
+        if ('error' in pixResult) {
+          return rep.status(pixResult.status || 400).send({ success: false, error: pixResult.error, details: pixResult.details })
+        }
+        await createPendingSubscription({
+          tenantId: tenant.id, plan, billingCycle: body.billingCycle,
+          pricePerMonth, totalMonths, gateway: body.gateway, externalReference,
+        })
+        return rep.send({ success: true, data: { pix: pixResult.pix, externalReference } })
       }
 
       const result = body.gateway === 'stripe'
@@ -91,6 +124,39 @@ export async function subscriptionRoutes(app: FastifyInstance) {
       })
 
       return rep.send({ success: true, data: { url: result.url } })
+    })
+
+    // Consulta o pagamento direto no Mercado Pago e ativa o plano se estiver aprovado.
+    // Funciona mesmo sem webhook (ex.: teste local) e é usado pelo frontend para
+    // acompanhar o PIX e confirmar o retorno do cartão. Só confia na API do gateway.
+    authed.get('/mercadopago/payment/:paymentId', async (req, rep) => {
+      const { paymentId } = req.params as { paymentId: string }
+      if (!/^\d+$/.test(paymentId)) return rep.status(400).send({ success: false, error: 'ID de pagamento inválido' })
+      const token = process.env.MERCADOPAGO_ACCESS_TOKEN
+      if (!token) return rep.status(400).send({ success: false, error: 'Mercado Pago não configurado (falta MERCADOPAGO_ACCESS_TOKEN)' })
+
+      const resp = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!resp.ok) return rep.status(404).send({ success: false, error: 'Pagamento não encontrado no Mercado Pago' })
+      const payment: any = await resp.json()
+
+      const sub = payment?.external_reference
+        ? await findSubscriptionByExternalReference(payment.external_reference)
+        : null
+      if (!sub || Number(sub.tenant_id) !== Number(req.tenantId)) {
+        return rep.status(404).send({ success: false, error: 'Pagamento não pertence a esta assinatura' })
+      }
+
+      if (payment.status === 'approved' && sub.payment_status !== 'paid') {
+        await markSubscriptionPaid(sub.id)
+      } else if (['rejected', 'cancelled'].includes(payment.status) && sub.payment_status === 'pending') {
+        await markSubscriptionFailed(sub.id)
+      }
+      return rep.send({
+        success: true,
+        data: { status: payment.status, statusDetail: payment.status_detail, paid: payment.status === 'approved' },
+      })
     })
 
     authed.get('/status', async (req, rep) => {

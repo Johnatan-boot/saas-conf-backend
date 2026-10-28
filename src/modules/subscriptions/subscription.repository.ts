@@ -1,4 +1,5 @@
 import { db } from '../../database/connection'
+import { sendPurchaseConfirmation } from '../notifications/purchase-email.service'
 
 export const PLAN_PRICES: Record<string, number> = {
   economico: 49.90,
@@ -81,6 +82,9 @@ export async function markSubscriptionPaid(id: number) {
      WHERE id = ?`,
     [sub.plan, l.max_users, l.max_products, l.max_orders_month, sub.tenant_id]
   )
+
+  // E-mail de confirmação + recibo em PDF (não bloqueia nem derruba o webhook)
+  void sendPurchaseConfirmation(id)
 }
 
 export async function markSubscriptionFailed(id: number) {
